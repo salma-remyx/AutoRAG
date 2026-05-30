@@ -1,8 +1,9 @@
-from typing import List, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import pandas as pd
 
 from autorag.nodes.passagefilter.base import BasePassageFilter
+from autorag.nodes.passagefilter.risk_calibration import calibrate_risk_threshold
 from autorag.utils.util import convert_inputs_to_list, result_to_dataframe
 
 
@@ -17,21 +18,56 @@ class ThresholdCutoff(BasePassageFilter):
 		contents_list: List[List[str]],
 		scores_list: List[List[float]],
 		ids_list: List[List[str]],
-		threshold: float,
+		threshold: Optional[float] = None,
 		reverse: bool = False,
+		target_risk: Optional[float] = None,
+		calibration_scores: Optional[Sequence[float]] = None,
+		calibration_labels: Optional[Sequence[int]] = None,
+		risk_delta: float = 0.1,
 	) -> Tuple[List[List[str]], List[List[str]], List[List[float]]]:
 		"""
 		Filters the contents, scores, and ids based on a previous result's score.
 		Keeps at least one item per query if all scores are below the threshold.
 
+		When ``threshold`` is omitted and a labelled calibration set
+		(``calibration_scores`` / ``calibration_labels``) is supplied with a
+		``target_risk``, the cutoff is derived by risk-controlled calibration
+		(BalanceRAG, see :mod:`autorag.nodes.passagefilter.risk_calibration`)
+		instead of being hand-set: it certifies the most permissive threshold
+		whose selection-conditioned error rate is provably below ``target_risk``.
+
 		:param contents_list: List of content strings for each query.
 		:param scores_list: List of scores for each content.
 		:param ids_list: List of ids for each content.
-		:param threshold: The minimum score to keep an item.
+		:param threshold: The minimum score to keep an item. If ``None``, it is
+		    derived from risk calibration.
 		:param reverse: If True, the lower the score, the better.
 		    Default is False.
+		:param target_risk: Target selection-conditioned risk used to calibrate
+		    the threshold when ``threshold`` is ``None``.
+		:param calibration_scores: Per-item scores of a labelled calibration set.
+		:param calibration_labels: Binary relevance labels for the calibration
+		    set (``1`` relevant, ``0`` irrelevant).
+		:param risk_delta: Confidence level for calibration (risk controlled
+		    with probability ``1 - risk_delta``).
 		:return: Filtered lists of contents, ids, and scores.
 		"""
+		if threshold is None:
+			if target_risk is None or calibration_scores is None or (
+				calibration_labels is None
+			):
+				raise ValueError(
+					"threshold is required unless target_risk, "
+					"calibration_scores and calibration_labels are all provided."
+				)
+			threshold = calibrate_risk_threshold(
+				calibration_scores,
+				calibration_labels,
+				target_risk=target_risk,
+				delta=risk_delta,
+				reverse=reverse,
+			).threshold
+
 		remain_indices = list(
 			map(lambda x: self.__row_pure(x, threshold, reverse), scores_list)
 		)

@@ -462,3 +462,23 @@ Plus, check out our detailed documentation at [here](https://marker-inc-korea.gi
       url={https://arxiv.org/abs/2410.20878},
 }
 ```
+
+## Risk-Calibrated Passage Filtering — adapted from BalanceRAG: Joint Risk Calibration for Cascaded Retrieval-Augmented Generation
+
+The `ThresholdCutoff` passage filter can now *derive* its score cutoff from a
+labelled calibration set instead of having it hand-tuned. Given calibration
+scores, binary relevance labels, and a `target_risk`, it certifies the most
+permissive threshold whose selection-conditioned error rate is provably below
+the target (confidence `1 - risk_delta`), using Learn-then-Test calibration —
+Hoeffding-Bentkus p-values plus a fixed-sequence ("sequential graphical") test
+over the lattice of operating points. The same machinery extends to joint
+two-branch calibration for cascaded LLM-only / RAG routing
+(`calibrate_joint_thresholds`), deciding *when* to engage retrieval while
+bounding system risk and retrieval usage. See
+`autorag/nodes/passagefilter/risk_calibration.py`. The paper's neural
+uncertainty estimators and LLM backbones are not ported; the calibrator
+consumes whatever scalar scores the pipeline already produces.
+
+Adapted from [BalanceRAG: Joint Risk Calibration for Cascaded Retrieval-Augmented Generation](https://arxiv.org/abs/2605.20084v1).
+
+Contributed via [Remyx Recommendation](https://engine.remyx.ai).
